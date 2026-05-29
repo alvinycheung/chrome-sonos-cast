@@ -4,7 +4,7 @@
   "description": "Local server to stream tab audio from Chrome to Sonos",
   "main": "server.js",
   "dependencies": {
-    "lamejs": "^1.2.1",
+    "@breezystack/lamejs": "^1.2.7",
     "ws": "^8.16.0"
   }
 }

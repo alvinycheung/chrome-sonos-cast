@@ -1,7 +1,7 @@
 const http = require('http');
 const WebSocket = require('ws');
 const os = require('os');
-const lamejs = require('lamejs');
+const lamejs = require('@breezystack/lamejs');
 
 const PORT = 3000;
 const SONOS_IP = '192.168.1.78'; // Sonos Playbar IP found on network
