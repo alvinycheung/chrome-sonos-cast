@@ -72,10 +72,12 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.url === '/stream.wav') {
+    const TOTAL_SIZE = 1800000000; // ~1.8 GB, about 3 hours of streaming
+    
     if (req.method === 'HEAD') {
       res.writeHead(200, {
         'Content-Type': 'audio/x-wav',
-        'Transfer-Encoding': 'chunked',
+        'Content-Length': TOTAL_SIZE,
         'Connection': 'keep-alive'
       });
       res.end();
@@ -85,7 +87,7 @@ const server = http.createServer((req, res) => {
     // Serve live WAV stream
     res.writeHead(200, {
       'Content-Type': 'audio/x-wav',
-      'Transfer-Encoding': 'chunked',
+      'Content-Length': TOTAL_SIZE,
       'Connection': 'keep-alive',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
@@ -93,10 +95,9 @@ const server = http.createServer((req, res) => {
     });
     
     // Write 44-byte WAV header for CD-quality stereo audio (44.1kHz, 16-bit)
-    // We set ChunkSize and Subchunk2Size to 0xFFFFFFFF for infinite stream length
     const header = Buffer.alloc(44);
     header.write('RIFF', 0);
-    header.writeUInt32LE(0xFFFFFFFF, 4); // ChunkSize
+    header.writeUInt32LE(TOTAL_SIZE - 8, 4); // ChunkSize
     header.write('WAVE', 8);
     header.write('fmt ', 12);
     header.writeUInt32LE(16, 16); // Subchunk1Size
@@ -107,7 +108,7 @@ const server = http.createServer((req, res) => {
     header.writeUInt16LE(4, 32); // BlockAlign
     header.writeUInt16LE(16, 34); // BitsPerSample
     header.write('data', 36);
-    header.writeUInt32LE(0xFFFFFFFF, 40); // Subchunk2Size
+    header.writeUInt32LE(TOTAL_SIZE - 44, 40); // Subchunk2Size
     
     res.write(header);
     
