@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 20px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(135deg, #12131C 0%, #1A1C29 100%);
+      color: #FFFFFF;
+      box-sizing: border-box;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .logo-glow {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #FF5A00;
+      box-shadow: 0 0 10px #FF5A00;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.9); opacity: 0.6; }
+      50% { transform: scale(1.1); opacity: 1; }
+      100% { transform: scale(0.9); opacity: 0.6; }
+    }
+    h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: -0.5px;
+      background: linear-gradient(90deg, #FFFFFF 0%, #B0B3C6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .status-card {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      font-size: 13px;
+      color: #9A9DAF;
+      box-sizing: border-box;
+    }
+    .status-text {
+      color: #FF5A00;
+      font-weight: 500;
+    }
+    .btn {
+      width: 100%;
+      padding: 12px 20px;
+      border-radius: 8px;
+      border: none;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+      box-sizing: border-box;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #FF7A00 0%, #FF5A00 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(255, 90, 0, 0.3);
+    }
+    .btn-primary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 20px rgba(255, 90, 0, 0.4);
+    }
+    .btn-primary:active {
+      transform: translateY(1px);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #E2E3E9;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: none;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+    .footer {
+      font-size: 10px;
+      color: #626575;
+      text-align: center;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div id="glow" class="logo-glow" style="animation-play-state: paused; background: #626575; box-shadow: none;"></div>
+      <h2>Local Sonos Cast</h2>
+    </div>
+    
+    <div class="status-card">
+      Status: <span id="status">Idle</span>
+    </div>
+    
+    <button id="start-btn" class="btn btn-primary">Cast This Tab</button>
+    <button id="stop-btn" class="btn btn-secondary">Disconnect</button>
+    
+    <div class="footer">
+      Stereo CD Quality • No Paywalls • Running Locally
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

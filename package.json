@@ -1,0 +1,9 @@
+{
+  "name": "chrome-sonos-cast",
+  "version": "1.0.0",
+  "description": "Local server to stream tab audio from Chrome to Sonos",
+  "main": "server.js",
+  "dependencies": {
+    "ws": "^8.16.0"
+  }
+}

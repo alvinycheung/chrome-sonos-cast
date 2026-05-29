@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Local Sonos Cast",
+  "version": "1.0",
+  "description": "Cast Chrome tab audio to your local Sonos Playbar in high quality stereo for free.",
+  "permissions": [
+    "tabCapture",
+    "offscreen",
+    "activeTab"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
