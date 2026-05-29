@@ -57,13 +57,15 @@ async function startCapture(streamId) {
 
   const source = audioContext.createMediaStreamSource(mediaStream);
 
-  // Play audio locally so user can still hear it in their browser
-  source.connect(audioContext.destination);
+  // Create a silent gain node to keep the audio graph processing without playing out of Mac speakers
+  const silentGain = audioContext.createGain();
+  silentGain.gain.setValueAtTime(0, audioContext.currentTime);
+  silentGain.connect(audioContext.destination);
 
   // Create AudioWorkletNode to capture audio samples (2 channels for stereo)
   workletNode = new AudioWorkletNode(audioContext, 'pcm-processor');
   source.connect(workletNode);
-  workletNode.connect(audioContext.destination);
+  workletNode.connect(silentGain);
 
   workletNode.port.onmessage = (event) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
