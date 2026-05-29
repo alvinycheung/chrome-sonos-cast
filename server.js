@@ -1,7 +1,6 @@
 const http = require('http');
 const WebSocket = require('ws');
 const os = require('os');
-const lamejs = require('@breezystack/lamejs');
 
 const PORT = 3000;
 const SONOS_IP = '192.168.1.78'; // Sonos Playbar IP found on network
@@ -10,8 +9,9 @@ let activeClients = [];
 let totalBytesReceived = 0;
 let sonosName = 'Sonos Playbar';
 
-// MP3 Encoder setup (Stereo, 44.1kHz, 192kbps)
-let mp3encoder = new lamejs.Mp3Encoder(2, 44100, 192);
+// Placeholder for dynamically imported lamejs module and encoder instance
+let lamejs;
+let mp3encoder;
 
 // Fetch Sonos room/friendly name on startup
 function fetchSonosName() {
@@ -114,7 +114,9 @@ wss.on('connection', (ws) => {
   console.log('[WS] Chrome extension connected. Streaming audio to server...');
   
   // Reinitialize the MP3 Encoder on new connection
-  mp3encoder = new lamejs.Mp3Encoder(2, 44100, 192);
+  if (lamejs) {
+    mp3encoder = new lamejs.Mp3Encoder(2, 44100, 192);
+  }
   
   // Trigger Sonos Playbar to stream our HTTP endpoint
   triggerSonosPlay().catch(err => {
@@ -123,6 +125,8 @@ wss.on('connection', (ws) => {
   
   ws.on('message', (data) => {
     totalBytesReceived += data.length;
+    
+    if (!mp3encoder) return;
     
     // data is raw interleaved stereo 16-bit PCM (little-endian)
     const numSamples = data.length / 4;
@@ -150,12 +154,14 @@ wss.on('connection', (ws) => {
     console.log('[WS] Chrome extension disconnected. Stopping Sonos...');
     
     // Flush remaining MP3 bytes
-    const mp3buf = mp3encoder.flush();
-    if (mp3buf.length > 0) {
-      const mp3chunk = Buffer.from(mp3buf);
-      activeClients.forEach(client => {
-        client.write(mp3chunk);
-      });
+    if (mp3encoder) {
+      const mp3buf = mp3encoder.flush();
+      if (mp3buf.length > 0) {
+        const mp3chunk = Buffer.from(mp3buf);
+        activeClients.forEach(client => {
+          client.write(mp3chunk);
+        });
+      }
     }
     
     activeClients.forEach(client => client.end());
@@ -239,9 +245,23 @@ async function triggerSonosStop() {
   }
 }
 
-server.listen(PORT, () => {
-  console.log(`\n=============================================================`);
-  console.log(`Local Sonos Streaming Server running at http://${localIp}:${PORT}/`);
-  console.log(`Sonos Playbar Target IP: ${SONOS_IP}`);
-  console.log(`=============================================================\n`);
-});
+// Async initialization function to load ES Module and start server
+async function startServer() {
+  try {
+    console.log('[Server] Loading MP3 Encoder library...');
+    lamejs = await import('@breezystack/lamejs');
+    mp3encoder = new lamejs.Mp3Encoder(2, 44100, 192);
+    
+    server.listen(PORT, () => {
+      console.log(`\n=============================================================`);
+      console.log(`Local Sonos Streaming Server running at http://${localIp}:${PORT}/`);
+      console.log(`Sonos Playbar Target IP: ${SONOS_IP}`);
+      console.log(`=============================================================\n`);
+    });
+  } catch (e) {
+    console.error('[Server] Critical failure during startup:', e.message);
+    process.exit(1);
+  }
+}
+
+startServer();
