@@ -2,11 +2,30 @@ const startBtn = document.getElementById('start-btn');
 const stopBtn = document.getElementById('stop-btn');
 const statusText = document.getElementById('status');
 const glow = document.getElementById('glow');
+const speakerInfo = document.getElementById('speaker-info');
+const speakerName = document.getElementById('speaker-name');
+
+// Query local server to fetch Sonos Friendly name
+async function updateSonosName() {
+  try {
+    const res = await fetch('http://localhost:3000/status');
+    const data = await res.json();
+    if (data && data.sonosName) {
+      speakerName.textContent = data.sonosName;
+      speakerInfo.style.display = 'block';
+    }
+  } catch (e) {
+    console.log('Local server status endpoint offline:', e.message);
+    speakerName.textContent = 'Sonos Playbar';
+    speakerInfo.style.display = 'block';
+  }
+}
 
 // Check current state from background service worker
 chrome.runtime.sendMessage({ type: 'get-status' }, (response) => {
   if (response && response.isCasting) {
     showCastingState(response.tabTitle);
+    updateSonosName();
   }
 });
 
@@ -16,6 +35,7 @@ startBtn.addEventListener('click', async () => {
   chrome.runtime.sendMessage({ type: 'start-cast' }, (response) => {
     if (response && response.success) {
       showCastingState(response.tabTitle);
+      updateSonosName();
     } else {
       statusText.textContent = 'Failed: ' + (response ? response.error : 'Unknown error');
       statusText.style.color = '#FF4D4D';
@@ -47,4 +67,5 @@ function showIdleState() {
   glow.style.animationPlayState = 'paused';
   startBtn.style.display = 'flex';
   stopBtn.style.display = 'none';
+  speakerInfo.style.display = 'none';
 }

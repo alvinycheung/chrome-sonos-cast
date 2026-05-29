@@ -6,6 +6,35 @@ const PORT = 3000;
 const SONOS_IP = '192.168.1.78'; // Sonos Playbar IP found on network
 
 let activeClients = [];
+let totalBytesReceived = 0;
+let sonosName = 'Sonos Playbar';
+
+// Fetch Sonos room/friendly name on startup
+function fetchSonosName() {
+  const req = http.request(`http://${SONOS_IP}:1400/xml/device_description.xml`, { method: 'GET', timeout: 3000 }, (res) => {
+    let data = '';
+    res.on('data', chunk => data += chunk);
+    res.on('end', () => {
+      const match = data.match(/<roomName>(.*?)<\/roomName>/) || data.match(/<friendlyName>(.*?)<\/friendlyName>/);
+      if (match && match[1]) {
+        sonosName = match[1].replace(/Media\s*Renderer|Media\s*Server/gi, '').replace(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\s*-\s*/, '').trim();
+        console.log(`[Sonos] Resolved device name: ${sonosName}`);
+      }
+    });
+  });
+  req.on('error', (e) => console.log(`[Sonos] Could not resolve device name: ${e.message}. Defaulting to 'Sonos Playbar'.`));
+  req.end();
+}
+fetchSonosName();
+
+// Periodically print throughput stats to verify streaming is active
+setInterval(() => {
+  if (totalBytesReceived > 0) {
+    const kb = (totalBytesReceived / 1024).toFixed(1);
+    console.log(`[Stream Stats] Received ${kb} KB from Chrome, active Sonos listeners: ${activeClients.length}`);
+    totalBytesReceived = 0; // Reset
+  }
+}, 5000);
 
 // Helper to get local IP address
 function getLocalIpAddress() {
@@ -27,8 +56,21 @@ console.log(`Detected Mac IP: ${localIp}`);
 
 // Create HTTP server to serve WAV stream
 const server = http.createServer((req, res) => {
-  console.log(`[HTTP] Sonos requested: ${req.method} ${req.url}`);
+  console.log(`[HTTP] Request: ${req.method} ${req.url}`);
   
+  if (req.url === '/status') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Access-Control-Allow-Origin': '*'
+    });
+    res.end(JSON.stringify({
+      sonosIp: SONOS_IP,
+      sonosName: sonosName,
+      streamingActive: activeClients.length > 0
+    }));
+    return;
+  }
+
   if (req.url === '/stream.wav') {
     if (req.method === 'HEAD') {
       res.writeHead(200, {
@@ -94,6 +136,7 @@ wss.on('connection', (ws) => {
   });
   
   ws.on('message', (data) => {
+    totalBytesReceived += data.length;
     // Forward the binary audio chunks to Sonos client connections
     activeClients.forEach(client => {
       client.write(data);
