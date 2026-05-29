@@ -1,6 +1,7 @@
 const http = require('http');
 const WebSocket = require('ws');
 const os = require('os');
+const lamejs = require('lamejs');
 
 const PORT = 3000;
 const SONOS_IP = '192.168.1.78'; // Sonos Playbar IP found on network
@@ -8,6 +9,9 @@ const SONOS_IP = '192.168.1.78'; // Sonos Playbar IP found on network
 let activeClients = [];
 let totalBytesReceived = 0;
 let sonosName = 'Sonos Playbar';
+
+// MP3 Encoder setup (Stereo, 44.1kHz, 192kbps)
+let mp3encoder = new lamejs.Mp3Encoder(2, 44100, 192);
 
 // Fetch Sonos room/friendly name on startup
 function fetchSonosName() {
@@ -54,7 +58,7 @@ function getLocalIpAddress() {
 const localIp = getLocalIpAddress();
 console.log(`Detected Mac IP: ${localIp}`);
 
-// Create HTTP server to serve WAV stream
+// Create HTTP server to serve MP3 stream
 const server = http.createServer((req, res) => {
   console.log(`[HTTP] Request: ${req.method} ${req.url}`);
   
@@ -71,46 +75,24 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.url === '/stream.wav') {
-    const TOTAL_SIZE = 1800000000; // ~1.8 GB, about 3 hours of streaming
-    
+  if (req.url === '/stream.mp3') {
     if (req.method === 'HEAD') {
       res.writeHead(200, {
-        'Content-Type': 'audio/x-wav',
-        'Content-Length': TOTAL_SIZE,
+        'Content-Type': 'audio/mpeg',
         'Connection': 'keep-alive'
       });
       res.end();
       return;
     }
     
-    // Serve live WAV stream
+    // Serve live MP3 radio stream
     res.writeHead(200, {
-      'Content-Type': 'audio/x-wav',
-      'Content-Length': TOTAL_SIZE,
+      'Content-Type': 'audio/mpeg',
       'Connection': 'keep-alive',
       'Cache-Control': 'no-cache, no-store, must-revalidate',
       'Pragma': 'no-cache',
       'Expires': 0
     });
-    
-    // Write 44-byte WAV header for CD-quality stereo audio (44.1kHz, 16-bit)
-    const header = Buffer.alloc(44);
-    header.write('RIFF', 0);
-    header.writeUInt32LE(TOTAL_SIZE - 8, 4); // ChunkSize
-    header.write('WAVE', 8);
-    header.write('fmt ', 12);
-    header.writeUInt32LE(16, 16); // Subchunk1Size
-    header.writeUInt16LE(1, 20); // AudioFormat (1 = PCM)
-    header.writeUInt16LE(2, 22); // NumChannels (2 = Stereo)
-    header.writeUInt32LE(44100, 24); // SampleRate (44.1kHz)
-    header.writeUInt32LE(44100 * 2 * 2, 28); // ByteRate
-    header.writeUInt16LE(4, 32); // BlockAlign
-    header.writeUInt16LE(16, 34); // BitsPerSample
-    header.write('data', 36);
-    header.writeUInt32LE(TOTAL_SIZE - 44, 40); // Subchunk2Size
-    
-    res.write(header);
     
     activeClients.push(res);
     console.log(`[HTTP] Sonos speaker connected to stream. Active listeners: ${activeClients.length}`);
@@ -131,6 +113,9 @@ const wss = new WebSocket.Server({ server });
 wss.on('connection', (ws) => {
   console.log('[WS] Chrome extension connected. Streaming audio to server...');
   
+  // Reinitialize the MP3 Encoder on new connection
+  mp3encoder = new lamejs.Mp3Encoder(2, 44100, 192);
+  
   // Trigger Sonos Playbar to stream our HTTP endpoint
   triggerSonosPlay().catch(err => {
     console.error('[Sonos] Failed to trigger Sonos playback:', err.message);
@@ -138,14 +123,44 @@ wss.on('connection', (ws) => {
   
   ws.on('message', (data) => {
     totalBytesReceived += data.length;
-    // Forward the binary audio chunks to Sonos client connections
-    activeClients.forEach(client => {
-      client.write(data);
-    });
+    
+    // data is raw interleaved stereo 16-bit PCM (little-endian)
+    const numSamples = data.length / 4;
+    const left = new Int16Array(numSamples);
+    const right = new Int16Array(numSamples);
+    
+    let idx = 0;
+    for (let i = 0; i < data.length; i += 4) {
+      left[idx] = data.readInt16LE(i);
+      right[idx] = data.readInt16LE(i + 2);
+      idx++;
+    }
+    
+    // Encode PCM to MP3 chunk
+    const mp3buf = mp3encoder.encodeBuffer(left, right);
+    if (mp3buf.length > 0) {
+      const mp3chunk = Buffer.from(mp3buf);
+      activeClients.forEach(client => {
+        client.write(mp3chunk);
+      });
+    }
   });
   
   ws.on('close', () => {
     console.log('[WS] Chrome extension disconnected. Stopping Sonos...');
+    
+    // Flush remaining MP3 bytes
+    const mp3buf = mp3encoder.flush();
+    if (mp3buf.length > 0) {
+      const mp3chunk = Buffer.from(mp3buf);
+      activeClients.forEach(client => {
+        client.write(mp3chunk);
+      });
+    }
+    
+    activeClients.forEach(client => client.end());
+    activeClients = [];
+    
     triggerSonosStop().catch(err => {
       console.error('[Sonos] Failed to stop Sonos playback:', err.message);
     });
@@ -185,7 +200,8 @@ function sendSonosSoap(action, body) {
 }
 
 async function triggerSonosPlay() {
-  const streamUrl = `http://${localIp}:${PORT}/stream.wav`;
+  // Use x-rincon-mp3radio:// scheme for live streaming compatibility
+  const streamUrl = `x-rincon-mp3radio://${localIp}:${PORT}/stream.mp3`;
   console.log(`[Sonos] Setting Sonos transport URI to: ${streamUrl}`);
   
   const setUriXml = `<u:SetAVTransportURI xmlns:u="urn:schemas-upnp-org:service:AVTransport:1">
